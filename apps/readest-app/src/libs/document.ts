@@ -117,6 +117,7 @@ export const EXTS: Record<BookFormat, string> = {
   FBZ: 'fbz',
   TXT: 'txt',
   MD: 'md',
+  ZIP: 'zip',
 };
 
 export const MIMETYPES: Record<BookFormat, string[]> = {
@@ -130,6 +131,7 @@ export const MIMETYPES: Record<BookFormat, string[]> = {
   FBZ: ['application/x-zip-compressed-fb2', 'application/zip'],
   TXT: ['text/plain'],
   MD: ['text/markdown', 'text/x-markdown'],
+  ZIP: ['application/zip'],
 };
 
 export interface DocumentLoaderOptions {
@@ -414,6 +416,34 @@ export class DocumentLoader {
           book = await makeFB2(blob);
           format = 'FBZ';
         } else {
+          // ZIP-with-TXT: if the archive contains .txt entries, treat each
+          // as a chapter segment and convert to EPUB on the fly.
+          const txtEntries = entries.filter(
+            (entry) => /\.txt$/i.test(entry.filename) && !entry.directory,
+          );
+          if (txtEntries.length > 0) {
+            const rawParts: Blob[] = [];
+            const separator = new Blob(['\n'.repeat(8)]);
+            for (const entry of txtEntries) {
+              const blob = await loader.loadBlob(entry.filename, 'application/octet-stream');
+              if (blob) {
+                if (rawParts.length > 0) rawParts.push(separator);
+                rawParts.push(blob as Blob);
+              }
+            }
+            if (rawParts.length > 0) {
+              const combinedBlob = new Blob(rawParts, { type: 'text/plain' });
+              const zipBaseName = this.file.name.replace(/\.zip$/i, '');
+              const combinedFile = new File([combinedBlob], `${zipBaseName}.txt`, {
+                type: 'text/plain',
+              });
+              const { TxtToEpubConverter } = await import('@/utils/txt');
+              const { file: epubFile } = await new TxtToEpubConverter().convert({
+                file: combinedFile,
+              });
+              return await new DocumentLoader(epubFile).open();
+            }
+          }
           const { EPUB } = await import('foliate-js/epub.js');
           book = await new EPUB(loader).init();
           format = 'EPUB';

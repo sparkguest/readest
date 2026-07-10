@@ -1208,6 +1208,30 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     });
   };
 
+  const handleOpenBook = async () => {
+    setIsSelectMode(false);
+    const result = await selectFiles({ type: 'books', multiple: false });
+    if (result.files.length === 0 || result.error) return;
+    const file = result.files[0]!;
+    const { library, setLibrary } = useLibraryStore.getState();
+    const settings = useSettingsStore.getState().settings;
+    const appBooksPrefix: string | null =
+      useSettingsStore.getState().settings.localBooksDir || null;
+    try {
+      const book = await ingestFile(
+        { file: file.file || file.path!, books: library },
+        { appService: appService!, settings, isLoggedIn: !!user, appBooksPrefix },
+      );
+      if (book) {
+        setLibrary(useLibraryStore.getState().library);
+        await appService!.saveLibraryBooks(useLibraryStore.getState().library);
+        navigateToReader(router, [book.hash]);
+      }
+    } catch (error) {
+      console.error('Failed to open book:', error);
+    }
+  };
+
   const handleImportBookFromUrl = async (url: string) => {
     // Tauri-only. Routes through the Rust `clip_url` command which spawns
     // a hidden Tauri webview, loads the URL with the real browser engine
@@ -1652,6 +1676,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           onImportBookFromUrl={isTauriAppPlatform() ? () => setShowImportFromUrl(true) : undefined}
           onOpenCatalogManager={handleShowOPDSDialog}
           onOpenFeeds={handleShowFeeds}
+          onOpenBook={handleOpenBook}
           onToggleSelectMode={() => handleSetSelectMode(!isSelectMode)}
           onSelectAll={handleSelectAll}
           onDeselectAll={handleDeselectAll}
@@ -1734,6 +1759,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 isSelectNone={isSelectNone}
                 onScrollerRef={handleScrollerRef}
                 handleImportBooks={handleImportBooksFromFiles}
+                onOpenBook={handleOpenBook}
                 handleBookUpload={handleBookUpload}
                 handleBookDownload={handleBookDownload}
                 handleBookDelete={handleBookDelete('both')}
@@ -1749,7 +1775,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         ) : (
           <div className='hero drop-zone h-screen items-center justify-center'>
             <DropIndicator />
-            <LibraryEmptyState onImport={handleImportBooksFromFiles} />
+            <LibraryEmptyState onImport={handleImportBooksFromFiles} onOpenBook={handleOpenBook} />
           </div>
         ))}
       <NowPlayingBar isSelectMode={isSelectMode} />

@@ -44,3 +44,4 @@ tauri-plugin-fs = { path = "packages/tauri-plugins/plugins/fs" }
 # override; the vendored copy cross-compiles via `--triple`/`--sdk` instead.
 # Upstream is unmaintained (last release 2024). See packages/swift-rs.
 swift-rs = { path = "packages/swift-rs" }
+turso_ext = { path = "patches/turso_ext" }

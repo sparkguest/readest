@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { MdLink, MdRssFeed } from 'react-icons/md';
+import { MdLink, MdRssFeed, MdOpenInNew } from 'react-icons/md';
 import { LuLibrary } from 'react-icons/lu';
 import { IoFileTray } from 'react-icons/io5';
 import { useEnv } from '@/context/EnvContext';
@@ -14,6 +14,7 @@ interface ImportMenuProps {
   onImportBookFromUrl?: () => void;
   onOpenCatalogManager: () => void;
   onOpenFeeds: () => void;
+  onOpenBook: () => void;
 }
 
 const ImportMenu: React.FC<ImportMenuProps> = ({
@@ -23,6 +24,7 @@ const ImportMenu: React.FC<ImportMenuProps> = ({
   onImportBookFromUrl,
   onOpenCatalogManager,
   onOpenFeeds,
+  onOpenBook,
 }) => {
   const _ = useTranslation();
   const { appService } = useEnv();
@@ -52,11 +54,21 @@ const ImportMenu: React.FC<ImportMenuProps> = ({
     setIsDropdownOpen?.(false);
   };
 
+  const handleOpenBook = () => {
+    onOpenBook();
+    setIsDropdownOpen?.(false);
+  };
+
   return (
     <Menu
       className={clsx('dropdown-content bg-base-100 rounded-box !relative z-[1] mt-3 p-2 shadow')}
       onCancel={() => setIsDropdownOpen?.(false)}
     >
+      <MenuItem
+        label={_('Open Book')}
+        Icon={<MdOpenInNew className='h-5 w-5' />}
+        onClick={handleOpenBook}
+      />
       <MenuItem
         label={_('From Local File')}
         Icon={<IoFileTray className='h-5 w-5' />}

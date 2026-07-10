@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PiPlus } from 'react-icons/pi';
+import { PiPlus, PiFile } from 'react-icons/pi';
 import { useOverlayScrollbars } from 'overlayscrollbars-react';
 import 'overlayscrollbars/overlayscrollbars.css';
 import {
@@ -71,6 +71,7 @@ interface BookshelfProps {
   isSelectNone: boolean;
   onScrollerRef: (el: HTMLDivElement | null) => void;
   handleImportBooks: () => void;
+  onOpenBook: () => void;
   handleBookDownload: (
     book: Book,
     options?: { redownload?: boolean; queued?: boolean },
@@ -161,6 +162,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   isSelectNone,
   onScrollerRef,
   handleImportBooks,
+  onOpenBook,
   handleBookUpload,
   handleBookDownload,
   handleBookDelete,
@@ -683,7 +685,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   // In grid mode the Import-Books "+" tile is rendered as an extra grid cell
   // after all books. We represent it to Virtuoso as an extra index past the
   // last book; list mode doesn't have an import tile.
-  const gridTotalCount = hasItems ? sortedBookshelfItems.length + 1 : 0;
+  const gridTotalCount = hasItems ? sortedBookshelfItems.length + 2 : 0;
 
   // Recently-read shelf: shares the availability-aware open path with per-item
   // taps so cloud-only synced books download before opening. `openBook` is
@@ -747,6 +749,32 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   const renderBookshelfItem = useCallback(
     (index: number) => {
       if (isGridMode && index === sortedBookshelfItems.length) {
+        return (
+          <div
+            className={clsx('bookshelf-import-item mx-0 my-2 sm:mx-4 sm:my-4')}
+            style={
+              coverFit === 'fit'
+                ? { display: 'flex', paddingBottom: `${iconSize15 + 24}px` }
+                : undefined
+            }
+          >
+            <button
+              aria-label={_('Open Book')}
+              className={clsx(
+                'bookitem-main bg-base-100 hover:bg-base-300/50',
+                'flex items-center justify-center',
+                'aspect-[28/41] w-full',
+              )}
+              onClick={onOpenBook}
+            >
+              <div className='flex items-center justify-center'>
+                <PiFile className='size-10' color='gray' />
+              </div>
+            </button>
+          </div>
+        );
+      }
+      if (isGridMode && index === sortedBookshelfItems.length + 1) {
         return (
           <div
             className={clsx('bookshelf-import-item mx-0 my-2 sm:mx-4 sm:my-4')}
@@ -824,6 +852,9 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   const computeItemKey = useCallback(
     (index: number) => {
       if (isGridMode && index === sortedBookshelfItems.length) {
+        return 'library-open-book-tile';
+      }
+      if (isGridMode && index === sortedBookshelfItems.length + 1) {
         return 'library-import-tile';
       }
       const item = sortedBookshelfItems[index];

@@ -10,9 +10,10 @@ import { navigateToLogin } from '@/utils/nav';
 
 interface LibraryEmptyStateProps {
   onImport: () => void;
+  onOpenBook: () => void;
 }
 
-const LibraryEmptyState: React.FC<LibraryEmptyStateProps> = ({ onImport }) => {
+const LibraryEmptyState: React.FC<LibraryEmptyStateProps> = ({ onImport, onOpenBook }) => {
   const _ = useTranslation();
   const { appService } = useEnv();
   const { user } = useAuth();
@@ -35,6 +36,13 @@ const LibraryEmptyState: React.FC<LibraryEmptyStateProps> = ({ onImport }) => {
           <button
             type='button'
             className='btn btn-primary h-11 min-h-11 rounded-lg'
+            onClick={onOpenBook}
+          >
+            {_('Open Book')}
+          </button>
+          <button
+            type='button'
+            className='btn btn-ghost h-11 min-h-11 rounded-lg'
             onClick={onImport}
           >
             {_('Import Books')}
