@@ -15,13 +15,22 @@ import {
   selectNewImportableFiles,
 } from '@/services/bookService';
 import { navigateToLibrary, navigateToLogin, navigateToReader } from '@/utils/nav';
-import { getBookWithUpdatedMetadata, listFormater } from '@/utils/book';
+import { getCoverFilename, getBookWithUpdatedMetadata, listFormater } from '@/utils/book';
 import { getImportErrorMessage } from '@/services/errors';
 import { ingestFile } from '@/services/ingestService';
 import { eventDispatcher } from '@/utils/event';
 import { ProgressPayload } from '@/utils/transfer';
 import { throttle } from '@/utils/throttle';
 import { transferManager } from '@/services/transferManager';
+import {
+  getCloudSyncProvider,
+  isReadestCloudStorageActive,
+  cloudProviderDisplayName,
+} from '@/services/sync/cloudSyncProvider';
+import {
+  runActiveFileBookDownload,
+  runActiveFileBookUpload,
+} from '@/services/sync/file/runLibrarySync';
 import { getDirPath, getFilename, joinPaths } from '@/utils/path';
 import { parseOpenWithFiles } from '@/helpers/openWith';
 import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
@@ -76,6 +85,10 @@ import { KeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp';
 import { BookDetailModal } from '@/components/metadata';
 import { UpdaterWindow } from '@/components/UpdaterWindow';
 import { CatalogDialog } from './components/OPDSDialog';
+import { FeedsView } from './components/feeds/FeedsView';
+import AddFeedModal from './components/feeds/AddFeedModal';
+import { fetchAndParseFeed } from '@/services/rss/feedClient';
+import { createFeedBook, generateFeedCoverSvg, rasterizeCoverSvg } from '@/services/rss/feedBook';
 import { MigrateDataWindow } from './components/MigrateDataWindow';
 import { BackupWindow } from './components/BackupWindow';
 import { CacheManagerWindow } from './components/CacheManagerWindow';
@@ -99,6 +112,8 @@ import ImportFromFolderDialog, {
   ImportFromFolderResult,
 } from './components/ImportFromFolderDialog';
 import ImportFromUrlDialog from './components/ImportFromUrlDialog';
+import NowPlayingBar from './components/NowPlayingBar';
+import { ttsSessionManager } from '@/services/tts';
 import { convertToEpubWithWorker } from '@/services/send/conversion/conversionWorker';
 import { getClipOptions } from '@/services/send/clipOptions';
 import { invoke } from '@tauri-apps/api/core';
@@ -193,6 +208,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const [showCatalogManager, setShowCatalogManager] = useState(
     searchParams?.get('opds') === 'true',
   );
+  const [showFeeds, setShowFeeds] = useState(false);
+  const [showAddFeed, setShowAddFeed] = useState(false);
   const [showImportFromUrl, setShowImportFromUrl] = useState(false);
   const [loading, setLoading] = useState(false);
   // Seed from the library store: if we already have books in memory (the
@@ -548,6 +565,32 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       return true;
     }
     return false;
+  };
+
+  const handleShowFeeds = () => {
+    setShowAddFeed(true);
+  };
+
+  const handleAddFeedSubmit = async (url: string) => {
+    const parsed = await fetchAndParseFeed(url);
+    const book = createFeedBook(url, parsed);
+    if (appService) {
+      try {
+        const cover = generateFeedCoverSvg(url, book.title);
+        const pngBytes = await rasterizeCoverSvg(cover);
+        await appService.createDir(book.hash, 'Books', true);
+        await appService.writeFile(getCoverFilename(book), 'Books', pngBytes);
+        book.coverImageUrl = await appService.generateCoverImageUrl(book);
+      } catch (e) {
+        console.warn('Failed to generate feed book cover:', e);
+      }
+    }
+    await useLibraryStore.getState().updateBooks(envConfig, [book]);
+    eventDispatcher.dispatch('toast', {
+      type: 'success',
+      message: _('Subscribed to "{{title}}"', { title: book.title }),
+      timeout: 3000,
+    });
   };
 
   const handleShowOPDSDialog = () => {
@@ -936,6 +979,20 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
 
   const handleBookUpload = useCallback(
     async (book: Book, _syncBooks = true) => {
+      // Route the explicit action to the selected cloud provider: while
+      // WebDAV / Google Drive is active the Readest Cloud transfer queue is
+      // gated and would only answer with the "paused" notice.
+      if (getCloudSyncProvider(useSettingsStore.getState().settings) !== 'readest') {
+        const ok = await runActiveFileBookUpload(envConfig, book);
+        eventDispatcher.dispatch('toast', {
+          type: ok ? 'info' : 'error',
+          timeout: 2000,
+          message: ok
+            ? _('Book uploaded: {{title}}', { title: book.title })
+            : _('Failed to upload book: {{title}}', { title: book.title }),
+        });
+        return ok;
+      }
       // Use transfer queue for uploads - priority 1 for manual uploads (higher priority)
       const transferId = transferManager.queueUpload(book, 1);
       if (transferId) {
@@ -948,6 +1005,19 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         });
         return true;
       }
+      // An explicit Upload action must never silently no-op: explain the
+      // provider gate when it is the reason the queue refused the book.
+      const currentSettings = useSettingsStore.getState().settings;
+      if (!isReadestCloudStorageActive(currentSettings)) {
+        const provider = getCloudSyncProvider(currentSettings);
+        eventDispatcher.dispatch('toast', {
+          type: 'info',
+          timeout: 5000,
+          message: _('Uploads to Readest Cloud are paused while {{provider}} sync is selected', {
+            provider: cloudProviderDisplayName(provider),
+          }),
+        });
+      }
       return false;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -957,6 +1027,20 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const handleBookDownload = useCallback(
     async (book: Book, downloadOptions: { redownload?: boolean; queued?: boolean } = {}) => {
       const { redownload = false, queued = false } = downloadOptions;
+      // Same provider routing as handleBookUpload — this path is also how a
+      // not-yet-local book gets fetched when the user opens it.
+      if (getCloudSyncProvider(useSettingsStore.getState().settings) !== 'readest') {
+        const ok = await runActiveFileBookDownload(envConfig, book);
+        if (ok) await updateBook(envConfig, book);
+        eventDispatcher.dispatch('toast', {
+          type: ok ? 'info' : 'error',
+          timeout: 2000,
+          message: ok
+            ? _('Book downloaded: {{title}}', { title: book.title })
+            : _('Failed to download book: {{title}}', { title: book.title }),
+        });
+        return ok;
+      }
       if (redownload || !queued) {
         try {
           await appService?.downloadBook(book, false, redownload, (progress) => {
@@ -1027,6 +1111,9 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             book.coverDownloadedAt = null;
           }
           await updateBook(envConfig, book);
+          if (ttsSessionManager.getSessionByHash(book.hash)) {
+            await ttsSessionManager.stopActive('deleted');
+          }
           clearBookData(book.hash);
           if (syncBooks) pushLibrary();
         }
@@ -1564,6 +1651,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           }
           onImportBookFromUrl={isTauriAppPlatform() ? () => setShowImportFromUrl(true) : undefined}
           onOpenCatalogManager={handleShowOPDSDialog}
+          onOpenFeeds={handleShowFeeds}
           onToggleSelectMode={() => handleSetSelectMode(!isSelectMode)}
           onSelectAll={handleSelectAll}
           onDeselectAll={handleDeselectAll}
@@ -1664,6 +1752,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             <LibraryEmptyState onImport={handleImportBooksFromFiles} />
           </div>
         ))}
+      <NowPlayingBar isSelectMode={isSelectMode} />
       {showDetailsBook && (
         <BookDetailModal
           isOpen={!!showDetailsBook}
@@ -1691,6 +1780,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       <CacheManagerWindow />
       {isSettingsDialogOpen && <SettingsDialog bookKey={''} />}
       {showCatalogManager && <CatalogDialog onClose={handleDismissOPDSDialog} />}
+      {showFeeds && <FeedsView onClose={() => setShowFeeds(false)} />}
+      <AddFeedModal
+        isOpen={showAddFeed}
+        onClose={() => setShowAddFeed(false)}
+        onSubmit={handleAddFeedSubmit}
+      />
       {failedImportsModal && (
         <FailedImportsDialog
           failedImports={failedImportsModal}
