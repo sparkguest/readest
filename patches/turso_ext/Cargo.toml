@@ -1,0 +1,16 @@
+[package]
+name = "turso_ext"
+version = "0.6.1"
+edition = "2021"
+build = "build.rs"
+description = "Limbo extensions core"
+
+[features]
+core_only = []
+static = []
+vfs = []
+
+[dependencies]
+turso_macros = "0.6.1"
+getrandom = "0.4.2"
+chrono = "0.4.42"

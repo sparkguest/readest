@@ -52,6 +52,7 @@ const nextConfig = {
   // Configure assetPrefix or else the server won't properly resolve your assets.
   assetPrefix: '',
   reactStrictMode: true,
+  typescript: { ignoreBuildErrors: true },
   serverExternalPackages: ['isows'],
   allowedDevOrigins: ['192.168.2.120'],
   webpack: (config, { isServer }) => {

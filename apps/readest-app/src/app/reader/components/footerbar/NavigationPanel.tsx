@@ -88,7 +88,12 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
           onChange={handleProgressChange}
         />
       </div>
-      <div className='flex w-full items-center justify-between gap-x-6'>
+      <div
+        className={clsx(
+          'flex w-full items-center justify-between gap-x-6',
+          viewSettings?.hideNavSlider && 'hidden',
+        )}
+      >
         <Button
           icon={getNavigationIcon(
             viewSettings?.rtl,

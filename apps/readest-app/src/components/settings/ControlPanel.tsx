@@ -45,6 +45,7 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
   const [showPaginationButtons, setShowPaginationButtons] = useState(
     viewSettings.showPaginationButtons,
   );
+  const [hideNavSlider, setHideNavSlider] = useState(viewSettings.hideNavSlider);
   const [isDisableClick, setIsDisableClick] = useState(viewSettings.disableClick);
   const [isDisableSwipe, setIsDisableSwipe] = useState(viewSettings.disableSwipe);
   const [fullscreenClickArea, setFullscreenClickArea] = useState(viewSettings.fullscreenClickArea);
@@ -96,6 +97,7 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
       scrollingOverlap: setScrollingOverlap,
       hideScrollbar: setHideScrollbar,
       showPaginationButtons: setShowPaginationButtons,
+      hideNavSlider: setHideNavSlider,
       disableClick: setIsDisableClick,
       disableSwipe: setIsDisableSwipe,
       swapClickArea: setSwapClickArea,
@@ -168,6 +170,10 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPaginationButtons]);
+
+  useEffect(() => {
+    saveViewSettings(envConfig, bookKey, 'hideNavSlider', hideNavSlider, false, false);
+  }, [hideNavSlider]);
 
   useEffect(() => {
     saveViewSettings(envConfig, bookKey, 'disableClick', isDisableClick, false, false);
@@ -408,6 +414,12 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
           checked={showPaginationButtons}
           onChange={() => setShowPaginationButtons(!showPaginationButtons)}
           data-setting-id='settings.control.showPaginationButtons'
+        />
+        <SettingsSwitchRow
+          label={_('Hide Nav Slider')}
+          checked={hideNavSlider}
+          onChange={() => setHideNavSlider(!hideNavSlider)}
+          data-setting-id='settings.control.hideNavSlider'
         />
       </BoxedList>
 

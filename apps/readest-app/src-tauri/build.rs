@@ -1,3 +1,4 @@
+// Build script for the Tauri application
 use std::{
     env, fs,
     path::{Path, PathBuf},

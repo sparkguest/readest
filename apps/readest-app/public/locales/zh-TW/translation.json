@@ -981,6 +981,7 @@
   "Export as Plain Text": "匯出為純文字",
   "Export as Markdown": "匯出為 Markdown",
   "Show Page Navigation Buttons": "顯示翻頁按鈕",
+  "Hide Nav Slider": "隱藏翻頁滑塊",
   "Page {{number}}": "第 {{number}} 頁",
   "highlight": "高亮",
   "underline": "底線",

@@ -90,6 +90,12 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    aaptOptions {
+        // Android AAPT2 by default ignores asset folders starting with _ (like _next/)
+        // and hidden folders starting with . (like .well-known). Override the pattern
+        // to include these while still excluding common VCS/OS junk.
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~"
+    }
 }
 
 rust {
